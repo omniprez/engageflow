@@ -11,7 +11,7 @@ import { QuickActions } from '../components/dashboard/QuickActions'
 import { UpcomingDeadlines } from '../components/dashboard/UpcomingDeadlines'
 import { TeamActivity } from '../components/dashboard/TeamActivity'
 import { motion } from 'framer-motion'
-import { Target, Trophy, TrendingUp, Award, Calendar, Users } from 'lucide-react'
+import { Target, Trophy, TrendingUp, Award, Zap, Calendar, Users, Star } from 'lucide-react'
 
 export function Dashboard() {
   const { user, refreshUser } = useAuth()
@@ -116,40 +116,81 @@ export function Dashboard() {
     return 'Good evening'
   }
 
+  const getMotivationalMessage = () => {
+    const messages = [
+      "You're making great progress! Keep up the momentum.",
+      "Every goal completed is a step towards success.",
+      "Your dedication is inspiring. Keep pushing forward!",
+      "Great things happen when you stay consistent.",
+      "You're building something amazing, one goal at a time."
+    ]
+    return messages[Math.floor(Math.random() * messages.length)]
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Welcome Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 rounded-xl p-6 text-white relative overflow-hidden"
+        className="relative overflow-hidden bg-gradient-to-r from-primary-600 via-primary-700 to-secondary-600 rounded-3xl p-8 text-white shadow-large"
       >
-        <div className="absolute inset-0 bg-black bg-opacity-10"></div>
+        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24"></div>
+        <div className="absolute top-1/2 right-1/4 w-32 h-32 bg-white/5 rounded-full"></div>
+        
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-2">
-            {getGreeting()}, {user?.full_name}! 👋
-          </h1>
-          <p className="text-primary-100 mb-4">
-            You're doing great! Keep up the momentum with your goals.
-          </p>
-          <div className="flex items-center space-x-6 text-sm">
-            <div className="flex items-center space-x-2">
-              <Trophy className="h-4 w-4" />
-              <span>Level {stats?.currentLevel || user?.level}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <TrendingUp className="h-4 w-4" />
-              <span>{stats?.totalPoints || user?.points} points</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Target className="h-4 w-4" />
-              <span>{stats?.activeGoals} active goals</span>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="h-12 w-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                  <Zap className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold mb-1">
+                    {getGreeting()}, {user?.full_name}! 👋
+                  </h1>
+                  <p className="text-primary-100 text-lg">
+                    {getMotivationalMessage()}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <Trophy className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">Level {stats?.currentLevel || user?.level}</p>
+                    <p className="text-primary-100 text-sm">Current Level</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <Star className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{stats?.totalPoints || user?.points}</p>
+                    <p className="text-primary-100 text-sm">Total Points</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <Target className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{stats?.activeGoals || 0}</p>
+                    <p className="text-primary-100 text-sm">Active Goals</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white bg-opacity-10 rounded-full -mr-16 -mt-16"></div>
-        <div className="absolute bottom-0 right-0 w-20 h-20 bg-white bg-opacity-5 rounded-full -mr-10 -mb-10"></div>
       </motion.div>
 
       {/* Stats Cards */}

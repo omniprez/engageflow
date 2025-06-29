@@ -5,6 +5,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { createDemoUsers } from '../lib/createDemoUsers'
+import { Zap, Mail, Lock, Users, Shield, Star } from 'lucide-react'
 
 export function Login() {
   const [email, setEmail] = useState('')
@@ -29,7 +30,6 @@ export function Login() {
     try {
       await signIn(email, password)
       toast.success('Welcome back!')
-      // Don't navigate here - let the useEffect handle it after user state updates
     } catch (error: any) {
       console.error('Login error:', error)
       if (error.message?.includes('Invalid login credentials')) {
@@ -38,7 +38,7 @@ export function Login() {
         toast.error(error.message || 'Failed to sign in')
       }
     } finally {
-      setLoading(false) // Set loading to false regardless of success or failure
+      setLoading(false)
     }
   }
 
@@ -54,13 +54,18 @@ export function Login() {
     }
   }
 
-  // Show loading spinner while checking auth state or during login
+  const handleDemoLogin = (demoEmail: string) => {
+    setEmail(demoEmail)
+    setPassword('password')
+  }
+
+  // Show loading spinner while checking auth state
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50">
         <div className="text-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600">Checking authentication...</p>
+          <p className="mt-4 text-neutral-600">Checking authentication...</p>
         </div>
       </div>
     )
@@ -69,113 +74,243 @@ export function Login() {
   // Don't render login form if user is already authenticated
   if (user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50">
         <div className="text-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600">Redirecting to dashboard...</p>
+          <p className="mt-4 text-neutral-600">Redirecting to dashboard...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 py-12 px-4 sm:px-6 lg:px-8">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full space-y-8"
-      >
-        <div>
-          <div className="mx-auto h-12 w-12 bg-primary-600 rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-lg">EF</span>
+    <div className="min-h-screen flex">
+      {/* Left side - Branding */}
+      <div className="hidden lg:flex lg:flex-1 lg:flex-col lg:justify-center lg:px-12 bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-600 relative overflow-hidden">
+        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -mr-48 -mt-48"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full -ml-32 -mb-32"></div>
+        
+        <div className="relative z-10 max-w-md">
+          <div className="flex items-center space-x-3 mb-8">
+            <div className="h-16 w-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+              <Zap className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-white">EngageFlow</h1>
+              <p className="text-primary-100">Employee Engagement Platform</p>
+            </div>
           </div>
-          <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
-            Sign in to EngageFlow
+          
+          <h2 className="text-4xl font-bold text-white mb-6 leading-tight">
+            Transform Your Workplace Engagement
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link
-              to="/register"
-              className="font-medium text-primary-600 hover:text-primary-500"
-            >
-              create a new account
-            </Link>
+          
+          <p className="text-xl text-primary-100 mb-8 leading-relaxed">
+            Empower your team with goal tracking, gamification, and meaningful recognition that drives real results.
           </p>
+          
+          <div className="space-y-4">
+            <div className="flex items-center space-x-3 text-primary-100">
+              <div className="h-8 w-8 bg-white/20 rounded-lg flex items-center justify-center">
+                <Star className="h-4 w-4" />
+              </div>
+              <span>Goal tracking and progress monitoring</span>
+            </div>
+            <div className="flex items-center space-x-3 text-primary-100">
+              <div className="h-8 w-8 bg-white/20 rounded-lg flex items-center justify-center">
+                <Users className="h-4 w-4" />
+              </div>
+              <span>Team collaboration and leaderboards</span>
+            </div>
+            <div className="flex items-center space-x-3 text-primary-100">
+              <div className="h-8 w-8 bg-white/20 rounded-lg flex items-center justify-center">
+                <Shield className="h-4 w-4" />
+              </div>
+              <span>Secure and enterprise-ready</span>
+            </div>
+          </div>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+      </div>
+
+      {/* Right side - Login form */}
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-neutral-50 via-white to-primary-50/30">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-md w-full space-y-8"
+        >
+          {/* Mobile logo */}
+          <div className="lg:hidden text-center">
+            <div className="mx-auto h-16 w-16 bg-gradient-to-br from-primary-600 to-secondary-600 rounded-2xl flex items-center justify-center shadow-soft mb-4">
+              <Zap className="h-8 w-8 text-white" />
             </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
+            <h1 className="text-2xl font-bold gradient-text">EngageFlow</h1>
+            <p className="text-neutral-600 mt-1">Employee Engagement Platform</p>
           </div>
 
-          <div>
+          <div className="text-center lg:text-left">
+            <h2 className="text-3xl font-bold text-neutral-900 mb-2">
+              Welcome back
+            </h2>
+            <p className="text-neutral-600">
+              Sign in to your account to continue your journey
+            </p>
+          </div>
+
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="label">
+                  <Mail className="h-4 w-4 inline mr-2" />
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="input"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="password" className="label">
+                  <Lock className="h-4 w-4 inline mr-2" />
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  className="input"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary w-full"
             >
-              {loading ? <LoadingSpinner size="sm" /> : 'Sign in'}
+              {loading ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <LoadingSpinner size="sm" />
+                  <span>Signing in...</span>
+                </div>
+              ) : (
+                'Sign in'
+              )}
             </button>
+          </form>
+
+          <div className="text-center">
+            <p className="text-sm text-neutral-600">
+              Don't have an account?{' '}
+              <Link
+                to="/register"
+                className="font-semibold text-primary-600 hover:text-primary-700 transition-colors"
+              >
+                Create one here
+              </Link>
+            </p>
           </div>
 
-          <div className="text-center space-y-4">
-            <div>
-              <p className="text-sm text-gray-600">
-                Demo accounts:
+          {/* Demo accounts section */}
+          <div className="border-t border-neutral-200 pt-6">
+            <div className="text-center mb-4">
+              <h3 className="text-sm font-semibold text-neutral-700 mb-2">Try Demo Accounts</h3>
+              <p className="text-xs text-neutral-500">
+                Click on any account below to auto-fill the login form
               </p>
-              <div className="mt-2 space-y-1 text-xs text-gray-500">
-                <p>Employee: employee@demo.com / password</p>
-                <p>Manager: manager@demo.com / password</p>
-                <p>Admin: admin@demo.com / password</p>
-              </div>
             </div>
             
-            <div className="pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('employee@demo.com')}
+                className="flex items-center justify-between p-3 bg-neutral-50 hover:bg-neutral-100 rounded-xl border border-neutral-200 transition-colors text-left"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 bg-primary-100 rounded-lg flex items-center justify-center">
+                    <Users className="h-4 w-4 text-primary-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">Employee Demo</p>
+                    <p className="text-xs text-neutral-500">employee@demo.com</p>
+                  </div>
+                </div>
+                <span className="text-xs text-neutral-400">Click to use</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('manager@demo.com')}
+                className="flex items-center justify-between p-3 bg-neutral-50 hover:bg-neutral-100 rounded-xl border border-neutral-200 transition-colors text-left"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 bg-secondary-100 rounded-lg flex items-center justify-center">
+                    <Shield className="h-4 w-4 text-secondary-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">Manager Demo</p>
+                    <p className="text-xs text-neutral-500">manager@demo.com</p>
+                  </div>
+                </div>
+                <span className="text-xs text-neutral-400">Click to use</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('admin@demo.com')}
+                className="flex items-center justify-between p-3 bg-neutral-50 hover:bg-neutral-100 rounded-xl border border-neutral-200 transition-colors text-left"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 bg-accent-100 rounded-lg flex items-center justify-center">
+                    <Star className="h-4 w-4 text-accent-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">Admin Demo</p>
+                    <p className="text-xs text-neutral-500">admin@demo.com</p>
+                  </div>
+                </div>
+                <span className="text-xs text-neutral-400">Click to use</span>
+              </button>
+            </div>
+            
+            <div className="mt-4 text-center">
               <button
                 type="button"
                 onClick={handleCreateDemoUsers}
                 disabled={creatingDemoUsers}
-                className="w-full flex justify-center py-2 px-4 border border-primary-600 text-sm font-medium rounded-md text-primary-600 bg-white hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-secondary w-full"
               >
-                {creatingDemoUsers ? <LoadingSpinner size="sm" /> : 'Create Demo Users'}
+                {creatingDemoUsers ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <LoadingSpinner size="sm" />
+                    <span>Creating demo users...</span>
+                  </div>
+                ) : (
+                  'Create Demo Users'
+                )}
               </button>
-              <p className="mt-2 text-xs text-gray-500">
-                Click this button if demo accounts don't exist yet
+              <p className="mt-2 text-xs text-neutral-500">
+                Click this if demo accounts don't exist yet
               </p>
             </div>
           </div>
-        </form>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   )
 }
