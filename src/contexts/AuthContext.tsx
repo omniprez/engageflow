@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [authInitialized, setAuthInitialized] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.error('❌ Error getting session:', error)
             if (mounted) {
               setLoading(false)
+              setAuthInitialized(true)
             }
             return
           }
@@ -57,18 +59,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               await handleUserProfile(session.user)
             } else {
               setLoading(false)
+              setAuthInitialized(true)
             }
           }
         } catch (sessionError) {
           console.error('💥 Session retrieval failed:', sessionError)
           if (mounted) {
             setLoading(false)
+            setAuthInitialized(true)
           }
         }
       } catch (error) {
         console.error('💥 Error in initializeAuth:', error)
         if (mounted) {
           setLoading(false)
+          setAuthInitialized(true)
         }
       }
     }
@@ -94,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mounted) {
           setUser(fallbackUser)
           setLoading(false)
+          setAuthInitialized(true)
         }
 
         // Try to fetch real profile
@@ -126,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Ensure loading is set to false even on error
         if (mounted) {
           setLoading(false)
+          setAuthInitialized(true)
         }
       }
     }
@@ -162,7 +169,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    initializeAuth()
+    // Only initialize auth once
+    if (!authInitialized) {
+      initializeAuth()
+    }
 
     // Listen for auth changes
     const {
@@ -179,6 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null)
         setLoading(false)
+        setAuthInitialized(true)
       }
     })
 
@@ -186,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, [authInitialized])
 
   const refreshUser = async () => {
     if (!supabaseUser) return
@@ -210,21 +221,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Try to sync points
         try {
-          await supabase.rpc('sync_user_points', {
+          const { data: syncData } = await supabase.rpc('sync_user_points', {
             target_user_id: supabaseUser.id
           })
           
-          // Try fetching profile again after sync
-          const { data: syncedData, error: syncedError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', supabaseUser.id)
-            .single()
+          if (syncData && syncData.length > 0) {
+            console.log('✅ Points synced during refresh:', syncData[0])
             
-          if (!syncedError && syncedData) {
-            console.log('✅ User profile refreshed after sync:', syncedData)
-            setUser(syncedData)
-            return syncedData
+            // Try fetching profile again after sync
+            const { data: syncedData, error: syncedError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', supabaseUser.id)
+              .single()
+              
+            if (!syncedError && syncedData) {
+              console.log('✅ User profile refreshed after sync:', syncedData)
+              setUser(syncedData)
+              return syncedData
+            }
           }
         } catch (syncError) {
           console.error('❌ Error syncing points during refresh:', syncError)
@@ -292,7 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser({ ...user, ...updates })
     } catch (error) {
       console.error('Error updating profile:', error)
-      setUser({ ...user, ...updates })
+      throw error
     }
   }
 

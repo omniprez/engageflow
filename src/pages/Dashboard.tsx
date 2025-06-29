@@ -19,6 +19,7 @@ export function Dashboard() {
   const [recentGoals, setRecentGoals] = useState<Goal[]>([])
   const [recentActivity, setRecentActivity] = useState<PointTransaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [dataLoaded, setDataLoaded] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -90,6 +91,7 @@ export function Dashboard() {
         .limit(10)
 
       setRecentActivity(activityData || [])
+      setDataLoaded(true)
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -98,7 +100,8 @@ export function Dashboard() {
     }
   }
 
-  if (loading) {
+  // If we have a user but data hasn't loaded yet, show a loading spinner
+  if (user && !dataLoaded && loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" />

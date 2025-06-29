@@ -16,11 +16,18 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 
   // Refresh user data when route changes
   useEffect(() => {
-    if (user && !loading) {
-      refreshUser().catch(err => {
-        console.error('Error refreshing user in ProtectedRoute:', err)
-      })
+    const refreshUserData = async () => {
+      if (user && !loading) {
+        try {
+          console.log('Refreshing user data on route change:', location.pathname)
+          await refreshUser()
+        } catch (err) {
+          console.error('Error refreshing user in ProtectedRoute:', err)
+        }
+      }
     }
+    
+    refreshUserData()
   }, [location.pathname])
 
   // Show loading spinner while checking auth
