@@ -96,7 +96,7 @@ export function Layout({ children }: LayoutProps) {
                   key={item.name}
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
-                  className={isActive ? 'nav-link-active' : 'nav-link-inactive'}
+                  className={`group ${isActive ? 'nav-link-active' : 'nav-link-inactive'}`}
                 >
                   <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-primary-600' : 'text-neutral-400 group-hover:text-neutral-600'}`} />
                   <span>{item.name}</span>
@@ -152,7 +152,7 @@ export function Layout({ children }: LayoutProps) {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={isActive ? 'nav-link-active' : 'nav-link-inactive'}
+                  className={`group ${isActive ? 'nav-link-active' : 'nav-link-inactive'}`}
                 >
                   <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-primary-600' : 'text-neutral-400 group-hover:text-neutral-600'}`} />
                   <span>{item.name}</span>
