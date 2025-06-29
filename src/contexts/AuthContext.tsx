@@ -36,37 +36,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('🔄 Initializing auth...')
         
-        // Get initial session with a longer timeout
-        const sessionPromise = supabase.auth.getSession()
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session timeout')), 10000)
-        )
+        // Get initial session with improved error handling
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession()
 
-        const { data: { session }, error } = await Promise.race([
-          sessionPromise,
-          timeoutPromise
-        ]) as any
+          if (error) {
+            console.error('❌ Error getting session:', error)
+            // Don't throw here, just log and continue with no session
+            if (mounted) {
+              setSupabaseUser(null)
+              setUser(null)
+              setLoading(false)
+            }
+            return
+          }
 
-        if (error) {
-          console.error('❌ Error getting session:', error)
-          if (mounted) setLoading(false)
-          return
-        }
-
-        console.log('📋 Initial session:', session?.user?.email || 'No session')
-        
-        if (mounted) {
-          setSupabaseUser(session?.user ?? null)
+          console.log('📋 Initial session:', session?.user?.email || 'No session')
           
-          if (session?.user) {
-            await handleUserProfile(session.user)
-          } else {
+          if (mounted) {
+            setSupabaseUser(session?.user ?? null)
+            
+            if (session?.user) {
+              await handleUserProfile(session.user)
+            } else {
+              setLoading(false)
+            }
+          }
+        } catch (sessionError) {
+          console.error('💥 Session retrieval failed:', sessionError)
+          // Gracefully handle session timeout/failure
+          if (mounted) {
+            setSupabaseUser(null)
+            setUser(null)
             setLoading(false)
           }
         }
       } catch (error) {
         console.error('💥 Error in initializeAuth:', error)
-        if (mounted) setLoading(false)
+        if (mounted) {
+          setSupabaseUser(null)
+          setUser(null)
+          setLoading(false)
+        }
       }
     }
 
@@ -84,17 +95,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log(`📡 Profile fetch attempt ${attempts}/${maxAttempts}`)
           
           try {
-            const { data, error } = await Promise.race([
-              supabase.from('profiles').select('*').eq('id', authUser.id).single(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Profile timeout')), 8000))
-            ]) as any
+            const { data, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', authUser.id)
+              .single()
 
             if (!error && data) {
               profileData = data
               console.log('✅ Profile fetched successfully:', data.email, 'Points:', data.points)
-            } else if (error && !error.message.includes('timeout')) {
+            } else if (error) {
               console.error('❌ Profile fetch error:', error)
-              break // Don't retry on non-timeout errors
+              break // Don't retry on database errors
             }
           } catch (fetchError: any) {
             console.log(`⚠️ Profile fetch attempt ${attempts} failed:`, fetchError.message)
@@ -218,16 +230,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       while (attempts < maxAttempts) {
         attempts++
         try {
-          const { data, error } = await Promise.race([
-            supabase.from('profiles').select('*').eq('id', supabaseUser.id).single(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Refresh timeout')), 5000))
-          ]) as any
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', supabaseUser.id)
+            .single()
 
           if (!error && data) {
             console.log('✅ User profile refreshed:', data.email, 'Points:', data.points)
             setUser(data)
             return
-          } else if (error && !error.message.includes('timeout')) {
+          } else if (error) {
             console.error('❌ Profile refresh error:', error)
             break
           }
