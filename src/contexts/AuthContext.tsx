@@ -103,26 +103,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (!error && data && mounted) {
             console.log('✅ Profile fetched successfully:', data.email, 'Points:', data.points)
             setUser(data)
-            
-            // Force a point sync to ensure accuracy
-            try {
-              console.log('🔄 Triggering point sync for user:', data.email)
-              await supabase.rpc('sync_user_points', { target_user_id: data.id })
-              
-              // Fetch updated profile after sync
-              const { data: updatedData } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', authUser.id)
-                .single()
-              
-              if (updatedData && mounted) {
-                console.log('✅ Profile updated after sync:', updatedData.email, 'Points:', updatedData.points)
-                setUser(updatedData)
-              }
-            } catch (syncError) {
-              console.log('⚠️ Point sync failed, continuing with fetched profile:', syncError)
-            }
           }
         } catch (profileError) {
           console.log('⚠️ Profile fetch failed, using fallback:', profileError)
@@ -167,15 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('🔄 Refreshing user profile...')
       
-      // First, trigger a point sync
-      try {
-        console.log('🔄 Syncing points before refresh...')
-        await supabase.rpc('sync_user_points', { target_user_id: supabaseUser.id })
-      } catch (syncError) {
-        console.log('⚠️ Point sync failed during refresh:', syncError)
-      }
-      
-      // Then fetch the updated profile
+      // Fetch the updated profile
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
