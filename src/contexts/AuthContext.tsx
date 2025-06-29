@@ -36,15 +36,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('🔄 Initializing auth...')
         
-        // Get initial session without a timeout that could cause errors
+        // Get initial session without a timeout
         try {
           const { data: { session }, error } = await supabase.auth.getSession()
 
           if (error) {
             console.error('❌ Error getting session:', error)
             if (mounted) {
-              setSupabaseUser(null)
-              setUser(null)
               setLoading(false)
             }
             return
@@ -64,16 +62,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (sessionError) {
           console.error('💥 Session retrieval failed:', sessionError)
           if (mounted) {
-            setSupabaseUser(null)
-            setUser(null)
             setLoading(false)
           }
         }
       } catch (error) {
         console.error('💥 Error in initializeAuth:', error)
         if (mounted) {
-          setSupabaseUser(null)
-          setUser(null)
           setLoading(false)
         }
       }
@@ -102,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false)
         }
 
-        // Try to fetch real profile in background
+        // Try to fetch real profile
         try {
           const { data, error } = await supabase
             .from('profiles')
@@ -113,26 +107,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (!error && data && mounted) {
             console.log('✅ Profile fetched successfully:', data.email, 'Points:', data.points)
             setUser(data)
-          } else if (error) {
+          } else {
             console.error('❌ Profile fetch error:', error)
             
-            // Try to sync points in the background
+            // Try to sync points
             try {
-              console.log('🔄 Attempting background point sync...')
-              const { data: syncResult } = await supabase.rpc('sync_user_points', {
-                target_user_id: authUser.id
-              })
-              
-              if (syncResult && syncResult.length > 0) {
-                const syncedPoints = syncResult[0].new_points
-                console.log('✅ Points synced successfully:', syncedPoints)
-                
-                if (mounted) {
-                  setUser(prev => prev ? { ...prev, points: syncedPoints } : null)
-                }
-              }
+              await syncUserPoints(authUser.id)
             } catch (syncError) {
-              console.log('⚠️ Background point sync failed:', syncError)
+              console.log('⚠️ Point sync failed:', syncError)
             }
           }
         } catch (profileError) {
@@ -141,7 +123,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       } catch (error) {
         console.error('💥 Error in handleUserProfile:', error)
-        // Fallback user should already be set
+        // Ensure loading is set to false even on error
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    const syncUserPoints = async (userId: string) => {
+      try {
+        console.log('🔄 Syncing points for user:', userId)
+        const { data, error } = await supabase.rpc('sync_user_points', {
+          target_user_id: userId
+        })
+        
+        if (error) throw error
+        
+        if (data && data.length > 0) {
+          console.log('✅ Points synced successfully:', data[0])
+          
+          // Fetch updated profile after sync
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single()
+            
+          if (!profileError && profileData && mounted) {
+            console.log('✅ Updated profile after sync:', profileData)
+            setUser(profileData)
+          }
+        }
+        
+        return data
+      } catch (error) {
+        console.error('❌ Error syncing points:', error)
+        throw error
       }
     }
 
@@ -177,22 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('🔄 Refreshing user profile...')
       
-      // Try to sync points first
-      try {
-        console.log('🔄 Syncing points before refresh...')
-        const { data: syncResult } = await supabase.rpc('sync_user_points', {
-          target_user_id: supabaseUser.id
-        })
-        
-        if (syncResult && syncResult.length > 0) {
-          const syncedPoints = syncResult[0].new_points
-          console.log('✅ Points synced successfully:', syncedPoints)
-        }
-      } catch (syncError) {
-        console.log('⚠️ Point sync failed during refresh:', syncError)
-      }
-      
-      // Then fetch the updated profile
+      // Fetch the updated profile
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -202,12 +204,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!error && data) {
         console.log('✅ User profile refreshed:', data.email, 'Points:', data.points)
         setUser(data)
+        return data
       } else {
         console.error('❌ Profile refresh error:', error)
+        
+        // Try to sync points
+        try {
+          await supabase.rpc('sync_user_points', {
+            target_user_id: supabaseUser.id
+          })
+          
+          // Try fetching profile again after sync
+          const { data: syncedData, error: syncedError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', supabaseUser.id)
+            .single()
+            
+          if (!syncedError && syncedData) {
+            console.log('✅ User profile refreshed after sync:', syncedData)
+            setUser(syncedData)
+            return syncedData
+          }
+        } catch (syncError) {
+          console.error('❌ Error syncing points during refresh:', syncError)
+        }
       }
     } catch (error) {
       console.error('❌ Error refreshing user:', error)
     }
+    
+    return null
   }
 
   const signIn = async (email: string, password: string) => {
