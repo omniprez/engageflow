@@ -11,29 +11,31 @@ import { QuickActions } from '../components/dashboard/QuickActions'
 import { UpcomingDeadlines } from '../components/dashboard/UpcomingDeadlines'
 import { TeamActivity } from '../components/dashboard/TeamActivity'
 import { motion } from 'framer-motion'
-import { Target, Trophy, TrendingUp, Award, Zap, Calendar, Users, Star } from 'lucide-react'
+import { Target, Trophy, TrendingUp, Award, Zap, Calendar, Users, Star, RefreshCw } from 'lucide-react'
 
 export function Dashboard() {
-  const { user, refreshUser } = useAuth()
+  const { user, refreshUser, loading: authLoading } = useAuth()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentGoals, setRecentGoals] = useState<Goal[]>([])
   const [recentActivity, setRecentActivity] = useState<PointTransaction[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (user) {
+    // Only fetch data if we have a user and auth is not loading
+    if (user && !authLoading) {
       fetchDashboardData()
-    } else {
-      // If no user, stop loading
-      setLoading(false)
     }
-  }, [user])
+  }, [user, authLoading])
 
   const fetchDashboardData = async () => {
     if (!user) {
-      setLoading(false)
+      console.log('No user available for dashboard data fetch')
       return
     }
+
+    setLoading(true)
+    setError(null)
 
     try {
       console.log('Fetching dashboard data for user:', user.email)
@@ -41,46 +43,33 @@ export function Dashboard() {
       // Refresh user data first to ensure we have the latest points
       await refreshUser()
       
-      // Fetch goals stats
-      const { data: goals, error: goalsError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('owner_id', user.id)
+      // Fetch all data in parallel for better performance
+      const [goalsResult, badgesResult, userResult, activityResult] = await Promise.allSettled([
+        supabase.from('goals').select('*').eq('owner_id', user.id),
+        supabase.from('user_badges').select('*').eq('user_id', user.id),
+        supabase.from('profiles').select('points, level').eq('id', user.id).single(),
+        supabase.from('point_transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10)
+      ])
 
-      if (goalsError) {
-        console.error('Error fetching goals:', goalsError)
-      }
+      // Process goals data
+      const goals = goalsResult.status === 'fulfilled' ? goalsResult.value.data || [] : []
+      const totalGoals = goals.length
+      const completedGoals = goals.filter(g => g.status === 'completed').length
+      const activeGoals = goals.filter(g => g.status === 'active').length
 
-      const totalGoals = goals?.length || 0
-      const completedGoals = goals?.filter(g => g.status === 'completed').length || 0
-      const activeGoals = goals?.filter(g => g.status === 'active').length || 0
+      // Process badges data
+      const badges = badgesResult.status === 'fulfilled' ? badgesResult.value.data || [] : []
+      const badgesEarned = badges.length
 
-      // Fetch badges count
-      const { data: userBadges, error: badgesError } = await supabase
-        .from('user_badges')
-        .select('*')
-        .eq('user_id', user.id)
-
-      if (badgesError) {
-        console.error('Error fetching badges:', badgesError)
-      }
-
-      const badgesEarned = userBadges?.length || 0
-
-      // Get the latest user data to ensure points are current
-      const { data: currentUser, error: userError } = await supabase
-        .from('profiles')
-        .select('points, level')
-        .eq('id', user.id)
-        .single()
-
-      if (userError) {
-        console.error('Error fetching current user:', userError)
-      }
-
+      // Process user data
+      const currentUser = userResult.status === 'fulfilled' ? userResult.value.data : null
       const currentPoints = currentUser?.points || user.points || 0
       const currentLevel = currentUser?.level || user.level || 1
 
+      // Process activity data
+      const activities = activityResult.status === 'fulfilled' ? activityResult.value.data || [] : []
+
+      // Set stats
       setStats({
         totalGoals,
         completedGoals,
@@ -91,45 +80,56 @@ export function Dashboard() {
         completionRate: totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0
       })
 
-      // Fetch recent goals
-      const { data: recentGoalsData, error: recentGoalsError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('owner_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(5)
+      // Set recent goals (limit to 5 most recent)
+      setRecentGoals(goals.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 5))
 
-      if (recentGoalsError) {
-        console.error('Error fetching recent goals:', recentGoalsError)
-      }
-
-      setRecentGoals(recentGoalsData || [])
-
-      // Fetch recent activity
-      const { data: activityData, error: activityError } = await supabase
-        .from('point_transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      if (activityError) {
-        console.error('Error fetching activity:', activityError)
-      }
-
-      setRecentActivity(activityData || [])
+      // Set recent activity
+      setRecentActivity(activities)
 
       console.log('Dashboard data loaded successfully')
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
+      setError('Failed to load dashboard data. Please try refreshing the page.')
     } finally {
-      // Always set loading to false, regardless of success or failure
       setLoading(false)
     }
   }
 
-  // Show loading spinner while fetching data
+  const handleRefresh = () => {
+    fetchDashboardData()
+  }
+
+  // Show loading spinner while auth is loading
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-neutral-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error if no user after auth loading is complete
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-neutral-600 mb-4">Unable to load dashboard. Please try signing in again.</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn-primary"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading spinner while fetching dashboard data
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -141,12 +141,16 @@ export function Dashboard() {
     )
   }
 
-  // If no user after loading is complete, show error state
-  if (!user) {
+  // Show error state
+  if (error) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <p className="text-neutral-600">Unable to load dashboard. Please try refreshing the page.</p>
+          <p className="text-error-600 mb-4">{error}</p>
+          <button onClick={handleRefresh} className="btn-primary flex items-center space-x-2">
+            <RefreshCw className="h-4 w-4" />
+            <span>Try Again</span>
+          </button>
         </div>
       </div>
     )
@@ -232,6 +236,14 @@ export function Dashboard() {
                 </div>
               </div>
             </div>
+            
+            <button
+              onClick={handleRefresh}
+              className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              title="Refresh dashboard"
+            >
+              <RefreshCw className="h-5 w-5" />
+            </button>
           </div>
         </div>
       </motion.div>
