@@ -19,45 +19,64 @@ export function Dashboard() {
   const [recentGoals, setRecentGoals] = useState<Goal[]>([])
   const [recentActivity, setRecentActivity] = useState<PointTransaction[]>([])
   const [loading, setLoading] = useState(true)
-  const [dataLoaded, setDataLoaded] = useState(false)
 
   useEffect(() => {
     if (user) {
       fetchDashboardData()
+    } else {
+      // If no user, stop loading
+      setLoading(false)
     }
   }, [user])
 
   const fetchDashboardData = async () => {
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
 
     try {
+      console.log('Fetching dashboard data for user:', user.email)
+      
       // Refresh user data first to ensure we have the latest points
       await refreshUser()
       
       // Fetch goals stats
-      const { data: goals } = await supabase
+      const { data: goals, error: goalsError } = await supabase
         .from('goals')
         .select('*')
         .eq('owner_id', user.id)
+
+      if (goalsError) {
+        console.error('Error fetching goals:', goalsError)
+      }
 
       const totalGoals = goals?.length || 0
       const completedGoals = goals?.filter(g => g.status === 'completed').length || 0
       const activeGoals = goals?.filter(g => g.status === 'active').length || 0
 
       // Fetch badges count
-      const { data: userBadges } = await supabase
+      const { data: userBadges, error: badgesError } = await supabase
         .from('user_badges')
         .select('*')
         .eq('user_id', user.id)
 
+      if (badgesError) {
+        console.error('Error fetching badges:', badgesError)
+      }
+
       const badgesEarned = userBadges?.length || 0
 
       // Get the latest user data to ensure points are current
-      const { data: currentUser } = await supabase
+      const { data: currentUser, error: userError } = await supabase
         .from('profiles')
         .select('points, level')
         .eq('id', user.id)
         .single()
+
+      if (userError) {
+        console.error('Error fetching current user:', userError)
+      }
 
       const currentPoints = currentUser?.points || user.points || 0
       const currentLevel = currentUser?.level || user.level || 1
@@ -73,38 +92,62 @@ export function Dashboard() {
       })
 
       // Fetch recent goals
-      const { data: recentGoalsData } = await supabase
+      const { data: recentGoalsData, error: recentGoalsError } = await supabase
         .from('goals')
         .select('*')
         .eq('owner_id', user.id)
         .order('updated_at', { ascending: false })
         .limit(5)
 
+      if (recentGoalsError) {
+        console.error('Error fetching recent goals:', recentGoalsError)
+      }
+
       setRecentGoals(recentGoalsData || [])
 
       // Fetch recent activity
-      const { data: activityData } = await supabase
+      const { data: activityData, error: activityError } = await supabase
         .from('point_transactions')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(10)
 
+      if (activityError) {
+        console.error('Error fetching activity:', activityError)
+      }
+
       setRecentActivity(activityData || [])
-      setDataLoaded(true)
+
+      console.log('Dashboard data loaded successfully')
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
     } finally {
+      // Always set loading to false, regardless of success or failure
       setLoading(false)
     }
   }
 
-  // If we have a user but data hasn't loaded yet, show a loading spinner
-  if (user && !dataLoaded && loading) {
+  // Show loading spinner while fetching data
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" />
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-neutral-600">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // If no user after loading is complete, show error state
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-neutral-600">Unable to load dashboard. Please try refreshing the page.</p>
+        </div>
       </div>
     )
   }
