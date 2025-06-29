@@ -36,10 +36,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('🔄 Initializing auth...')
         
-        // Get initial session with a timeout
+        // Get initial session with a longer timeout
         const sessionPromise = supabase.auth.getSession()
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session timeout')), 5000)
+          setTimeout(() => reject(new Error('Session timeout')), 10000)
         )
 
         const { data: { session }, error } = await Promise.race([
@@ -74,44 +74,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('👤 Handling user profile for:', authUser.email)
         
-        // Create fallback user immediately to avoid delays
-        const fallbackUser: User = {
-          id: authUser.id,
-          email: authUser.email || '',
-          full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
-          role: (authUser.user_metadata?.role as 'employee' | 'manager' | 'admin') || 'employee',
-          department: authUser.user_metadata?.department || 'General',
-          points: 0,
-          level: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
+        // Try to fetch the real profile with retries
+        let profileData = null
+        let attempts = 0
+        const maxAttempts = 3
 
-        // Set fallback user first to stop loading immediately
-        if (mounted) {
-          setUser(fallbackUser)
-          setLoading(false)
-        }
+        while (!profileData && attempts < maxAttempts && mounted) {
+          attempts++
+          console.log(`📡 Profile fetch attempt ${attempts}/${maxAttempts}`)
+          
+          try {
+            const { data, error } = await Promise.race([
+              supabase.from('profiles').select('*').eq('id', authUser.id).single(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Profile timeout')), 8000))
+            ]) as any
 
-        // Try to fetch real profile in background (non-blocking)
-        try {
-          const { data, error } = await Promise.race([
-            supabase.from('profiles').select('*').eq('id', authUser.id).single(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Profile timeout')), 3000))
-          ]) as any
-
-          if (!error && data && mounted) {
-            console.log('✅ Profile fetched successfully:', data.email, 'Points:', data.points)
-            setUser(data)
+            if (!error && data) {
+              profileData = data
+              console.log('✅ Profile fetched successfully:', data.email, 'Points:', data.points)
+            } else if (error && !error.message.includes('timeout')) {
+              console.error('❌ Profile fetch error:', error)
+              break // Don't retry on non-timeout errors
+            }
+          } catch (fetchError: any) {
+            console.log(`⚠️ Profile fetch attempt ${attempts} failed:`, fetchError.message)
+            if (attempts < maxAttempts) {
+              // Wait before retrying
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempts))
+            }
           }
-        } catch (profileError) {
-          console.log('⚠️ Profile fetch failed, using fallback:', profileError)
-          // Fallback user is already set, so we continue
+        }
+
+        if (mounted) {
+          if (profileData) {
+            // Use the real profile data
+            setUser(profileData)
+          } else {
+            // Create a basic fallback but try to sync points
+            console.log('⚠️ Using fallback profile, attempting point sync...')
+            
+            const fallbackUser: User = {
+              id: authUser.id,
+              email: authUser.email || '',
+              full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
+              role: (authUser.user_metadata?.role as 'employee' | 'manager' | 'admin') || 'employee',
+              department: authUser.user_metadata?.department || 'General',
+              points: 0, // Will be updated by sync
+              level: 1,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }
+
+            setUser(fallbackUser)
+
+            // Try to sync points in the background
+            try {
+              console.log('🔄 Attempting background point sync...')
+              const { data: syncResult } = await supabase.rpc('sync_user_points', {
+                target_user_id: authUser.id
+              })
+              
+              if (syncResult && syncResult.length > 0) {
+                const syncedPoints = syncResult[0].new_points
+                console.log('✅ Points synced successfully:', syncedPoints)
+                
+                setUser(prev => prev ? { ...prev, points: syncedPoints } : null)
+              }
+            } catch (syncError) {
+              console.log('⚠️ Background point sync failed:', syncError)
+            }
+          }
+          
+          setLoading(false)
         }
 
       } catch (error) {
         console.error('💥 Error in handleUserProfile:', error)
-        // Fallback user should already be set
+        if (mounted) {
+          // Set a basic fallback user to prevent auth loops
+          const fallbackUser: User = {
+            id: authUser.id,
+            email: authUser.email || '',
+            full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
+            role: (authUser.user_metadata?.role as 'employee' | 'manager' | 'admin') || 'employee',
+            department: authUser.user_metadata?.department || 'General',
+            points: 0,
+            level: 1,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+          setUser(fallbackUser)
+          setLoading(false)
+        }
       }
     }
 
@@ -147,17 +201,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('🔄 Refreshing user profile...')
       
-      // Fetch the updated profile
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', supabaseUser.id)
-        .single()
-
-      if (!error && data) {
-        console.log('✅ User profile refreshed:', data.email, 'Points:', data.points)
-        setUser(data)
+      // First try to sync points
+      try {
+        console.log('🔄 Syncing points before refresh...')
+        await supabase.rpc('sync_user_points', {
+          target_user_id: supabaseUser.id
+        })
+      } catch (syncError) {
+        console.log('⚠️ Point sync failed during refresh:', syncError)
       }
+      
+      // Then fetch the updated profile with retries
+      let attempts = 0
+      const maxAttempts = 3
+      
+      while (attempts < maxAttempts) {
+        attempts++
+        try {
+          const { data, error } = await Promise.race([
+            supabase.from('profiles').select('*').eq('id', supabaseUser.id).single(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Refresh timeout')), 5000))
+          ]) as any
+
+          if (!error && data) {
+            console.log('✅ User profile refreshed:', data.email, 'Points:', data.points)
+            setUser(data)
+            return
+          } else if (error && !error.message.includes('timeout')) {
+            console.error('❌ Profile refresh error:', error)
+            break
+          }
+        } catch (fetchError: any) {
+          console.log(`⚠️ Refresh attempt ${attempts} failed:`, fetchError.message)
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000))
+          }
+        }
+      }
+      
+      console.log('⚠️ Profile refresh failed after all attempts')
     } catch (error) {
       console.error('❌ Error refreshing user:', error)
     }
